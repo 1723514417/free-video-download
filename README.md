@@ -48,7 +48,7 @@ free-video-download/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/你的用户名/free-video-download.git
+git clone https://github.com/1723514417/free-video-download.git
 cd free-video-download
 ```
 
