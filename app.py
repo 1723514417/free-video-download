@@ -6,11 +6,51 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
+import re
+from urllib.parse import urlparse
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 import yt_dlp
+
+# 允许的图片域名白名单
+ALLOWED_IMAGE_DOMAINS = {
+    "i0.hdslb.com", "i1.hdslb.com", "i2.hdslb.com", "i3.hdslb.com",
+    "hdslb.com", "bilibili.com",
+    "p0.pstatp.com", "p1.pstatp.com", "p3.pstatp.com", "p6.pstatp.com",
+    "p9.pstatp.com", "p26.pstatp.com", "p29.pstatp.com",
+    "toutiao.com", "douyinpic.com", "douyinvod.com",
+    "yt3.ggpht.com", "ytimg.com", "youtube.com",
+    "twimg.com", "twvideo.com", "pbs.twimg.com",
+    "cdninstagram.com", "fbcdn.net",
+    "githubusercontent.com",
+    "pstatp.com", "snssdk.com", "bytedance.com",
+}
+
+ALLOWED_IMAGE_SCHEMES = {"http", "https"}
+
+
+def _is_url_allowed(url: str) -> bool:
+    """检查 URL 是否在允许的域名白名单内，防止 SSRF"""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme.lower() not in ALLOWED_IMAGE_SCHEMES:
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        # 禁止内网地址
+        if re.match(r"^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|localhost)", host):
+            return False
+        # 检查白名单
+        for domain in ALLOWED_IMAGE_DOMAINS:
+            if host == domain or host.endswith("." + domain):
+                return True
+        return False
+    except Exception:
+        return False
 
 DOWNLOADS_DIR = Path("downloads")
 
@@ -147,6 +187,8 @@ async def parse_video(req: ParseRequest):
 
 @app.get("/api/proxy-image")
 async def proxy_image(url: str):
+    if not _is_url_allowed(url):
+        raise HTTPException(status_code=403, detail="该图片域名不在白名单内")
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Referer": "https://www.bilibili.com/",
