@@ -1314,7 +1314,7 @@ async def ai_summarize_stream(req: StreamSummarizeRequest):
         raise HTTPException(status_code=400, detail="未配置 AI 服务，请在 .env 中设置 LLM_API_KEY")
 
     from starlette.responses import StreamingResponse
-    from openai import OpenAI
+    from openai import AsyncOpenAI
 
     logger.info(f"收到 SSE 流式总结请求: {req.url}")
 
@@ -1471,8 +1471,6 @@ mindmap
 
     async def _stream_generate():
         try:
-            from openai import AsyncOpenAI
-            
             client = AsyncOpenAI(
                 api_key=LLM_API_KEY,
                 base_url=LLM_API_BASE,
