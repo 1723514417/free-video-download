@@ -6,3 +6,4 @@ python-multipart==0.0.20
 httpx==0.28.1
 imageio-ffmpeg==0.6.0
 curl_cffi==0.13.0
+openai>=1.0.0

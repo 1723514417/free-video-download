@@ -142,7 +142,67 @@
                 </template>
                 <span v-if="isDownloading" class="download-status">{{ downloadStatus }}</span>
               </button>
+              <button
+                class="ai-btn stream-btn"
+                @click="aiSummarizeStream"
+                :disabled="isStreamSummarizing"
+              >
+                <span v-if="isStreamSummarizing" class="spinner"></span>
+                <template v-else>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  流式总结 ✨
+                </template>
+              </button>
+              <button
+                v-if="videoInfo.has_subtitle"
+                class="ai-btn subtitle-btn"
+                @click="exportSubtitle('srt')"
+                :disabled="isExportingSubtitle"
+              >
+                <span v-if="isExportingSubtitle" class="spinner"></span>
+                <template v-else>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                  导出字幕
+                </template>
+              </button>
             </div>
+
+            <transition name="fade-up">
+              <div v-if="showStreamSummary && (streamContent || isStreamSummarizing)" class="ai-summary-section stream-summary-section">
+                <div class="ai-summary-header">
+                  <div class="ai-badge stream-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                    {{ isStreamSummarizing ? 'AI 流式总结生成中...' : 'AI 流式总结' }}
+                    <span v-if="isStreamSummarizing" class="stream-cursor">▊</span>
+                  </div>
+                  <div class="stream-actions">
+                    <button v-if="streamComplete && streamContent" class="copy-summary-btn" @click="copyStreamContent" title="复制总结内容">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      {{ copyLabel }}
+                    </button>
+                  </div>
+                </div>
+                <div class="stream-summary-content" v-html="renderMarkdown(streamContent)"></div>
+                <div v-if="isStreamSummarizing" class="stream-loading">
+                  <div class="stream-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              </div>
+            </transition>
           </div>
         </section>
       </transition>
@@ -240,7 +300,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
 const videoUrl = ref('')
 const isLoading = ref(false)
@@ -252,6 +312,12 @@ const selectedFormat = ref('')
 const platformCategories = ref([])
 const openFaq = ref(-1)
 const downloadStatus = ref('')
+const copyLabel = ref('复制')
+const streamContent = ref('')
+const isStreamSummarizing = ref(false)
+const streamComplete = ref(false)
+const showStreamSummary = ref(false)
+const isExportingSubtitle = ref(false)
 
 const faqItems = [
   { q: '支持哪些视频平台？', a: '支持 YouTube、Bilibili（B站）、抖音、TikTok、Twitter/X、Instagram、Facebook、快手、微博、小红书、优酷、爱奇艺、腾讯视频等 1800+ 全球主流视频平台。' },
@@ -387,6 +453,145 @@ function formatFileSize(bytes) {
 
 function handleThumbnailError(e) {
   e.target.style.display = 'none'
+}
+
+async function aiSummarizeStream() {
+  if (!videoInfo.value) return
+  isStreamSummarizing.value = true
+  streamContent.value = ''
+  streamComplete.value = false
+  showStreamSummary.value = true
+  error.value = ''
+
+  try {
+    const res = await fetch('/api/ai-summarize-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: videoUrl.value.trim() }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      error.value = data.detail || 'AI 总结失败'
+      isStreamSummarizing.value = false
+      return
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          const dataStr = line.slice(5).trim()
+          if (dataStr === '[DONE]') {
+            streamComplete.value = true
+            isStreamSummarizing.value = false
+            continue
+          }
+          try {
+            const data = JSON.parse(dataStr)
+            if (data.type === 'delta' && data.content) {
+              streamContent.value += data.content
+              await nextTick()
+              const el = document.querySelector('.stream-summary-content')
+              if (el) el.scrollTop = el.scrollHeight
+            } else if (data.type === 'error' || data.type === 'no_subtitle') {
+              error.value = data.message || 'AI 总结失败'
+              isStreamSummarizing.value = false
+              streamComplete.value = true
+            } else if (data.type === 'complete') {
+              streamComplete.value = true
+              isStreamSummarizing.value = false
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {
+    error.value = '网络错误，请检查后端服务是否启动'
+    isStreamSummarizing.value = false
+  }
+}
+
+function copyStreamContent() {
+  if (!streamContent.value) return
+  navigator.clipboard.writeText(streamContent.value).then(() => {
+    copyLabel.value = '已复制'
+    setTimeout(() => { copyLabel.value = '复制' }, 2000)
+  })
+}
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>')
+  html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>')
+  html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>')
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+  html = html.replace(/```mermaid\n([\s\S]*?)```/g, '<div class="mermaid-block"><div class="mermaid-header">🧠 思维导图 (Mermaid)</div><pre class="mermaid-code">$1</pre></div>')
+  html = html.replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>')
+  html = html.replace(/\n\n/g, '</p><p>')
+  html = html.replace(/\n/g, '<br>')
+  html = '<p>' + html + '</p>'
+  html = html.replace(/<p><\/p>/g, '')
+  return html
+}
+
+async function exportSubtitle(format) {
+  if (!videoInfo.value) return
+  isExportingSubtitle.value = true
+  error.value = ''
+
+  try {
+    const res = await fetch('/api/export-subtitle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: videoUrl.value.trim(), format }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      error.value = data.detail || '字幕导出失败'
+      isExportingSubtitle.value = false
+      return
+    }
+
+    const blob = await res.blob()
+    const contentDisposition = res.headers.get('Content-Disposition')
+    let filename = `subtitle.${format}`
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename\*=UTF-8''(.+)/)
+      if (match) filename = decodeURIComponent(match[1])
+    }
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    error.value = '字幕导出失败，请检查网络连接'
+  } finally {
+    isExportingSubtitle.value = false
+  }
 }
 </script>
 
@@ -1249,6 +1454,353 @@ body {
     width: 100%;
     justify-content: center;
   }
+
+  .ai-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ai-summary-section {
+    padding: 20px;
+  }
+
+  .chapter-item {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.ai-btn {
+  background: var(--gradient);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 16px 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.ai-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ai-summary-section {
+  margin-top: 28px;
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius);
+}
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.ai-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--accent-3);
+}
+
+.copy-summary-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-xs);
+  color: var(--accent-3);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.copy-summary-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.ai-no-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.summary-block {
+  margin-bottom: 24px;
+}
+
+.summary-block:last-child {
+  margin-bottom: 0;
+}
+
+.summary-block h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-block > p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.key-points-list {
+  list-style: none;
+  padding: 0;
+}
+
+.key-points-list li {
+  position: relative;
+  padding: 8px 0 8px 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.key-points-list li:last-child {
+  border-bottom: none;
+}
+
+.key-points-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gradient);
+}
+
+.chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chapter-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(15, 15, 30, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.2s;
+}
+
+.chapter-item:hover {
+  border-color: var(--border-active);
+}
+
+.chapter-index {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  background: var(--gradient);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+}
+
+.chapter-content h5 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.chapter-content p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.stream-btn {
+  background: linear-gradient(135deg, #7c3aed, #2563eb) !important;
+}
+
+.stream-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6d28d9, #1d4ed8) !important;
+  transform: translateY(-2px);
+}
+
+.subtitle-btn {
+  background: linear-gradient(135deg, #059669, #0d9488) !important;
+}
+
+.subtitle-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #047857, #0f766e) !important;
+  transform: translateY(-2px);
+}
+
+.stream-summary-section {
+  max-height: 600px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.stream-badge {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(37, 99, 235, 0.2)) !important;
+}
+
+.stream-cursor {
+  animation: blink 1s infinite;
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.stream-summary-content {
+  overflow-y: auto;
+  flex: 1;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+.stream-summary-content .md-h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.stream-summary-content .md-h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 16px 0 8px;
+}
+
+.stream-summary-content strong {
+  color: var(--text-primary);
+}
+
+.stream-summary-content li {
+  margin: 4px 0;
+  padding-left: 8px;
+  list-style: disc;
+  margin-left: 16px;
+}
+
+.mermaid-block {
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 12px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+.mermaid-header {
+  padding: 10px 16px;
+  background: rgba(124, 58, 237, 0.12);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.mermaid-code {
+  padding: 16px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.code-block {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.stream-loading {
+  padding: 12px 16px;
+}
+
+.stream-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.stream-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+.stream-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.stream-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.stream-actions {
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 480px) {

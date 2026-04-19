@@ -18,12 +18,15 @@
 | 后端 | Python 3.9+ / FastAPI / yt-dlp |
 | 前端 | Vue 3 / Vite |
 | 音视频处理 | ffmpeg (通过 imageio-ffmpeg 自动集成) |
+| 反爬绕过 | curl_cffi (浏览器指纹模拟) |
 
 ## 📦 项目结构
 
 ```
 free-video-download/
 ├── app.py                  # FastAPI 后端主程序
+├── start.py                # 启动脚本（自动设置 UTF-8 编码）
+├── start.sh                # Linux/Mac 启动脚本
 ├── requirements.txt        # Python 依赖
 ├── .gitignore
 ├── README.md
@@ -32,7 +35,7 @@ free-video-download/
     ├── vite.config.js
     ├── index.html
     ├── public/
-    │   └── vite.svg        # Logo
+    │   └── vite.svg
     └── src/
         ├── main.js         # Vue 入口
         └── App.vue         # 主组件（UI + 交互逻辑）
@@ -48,7 +51,7 @@ free-video-download/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/你的用户名/free-video-download.git
+git clone https://github.com/1723514417/free-video-download.git
 cd free-video-download
 ```
 
@@ -59,8 +62,10 @@ cd free-video-download
 python -m venv venv
 
 # 激活虚拟环境
-# Windows:
+# Windows (CMD):
 venv\Scripts\activate
+# Windows (Git Bash):
+source venv/Scripts/activate
 # macOS/Linux:
 source venv/bin/activate
 
@@ -70,13 +75,33 @@ pip install -r requirements.txt
 
 ### 3. 启动后端服务
 
+**方式一：使用启动脚本（推荐，自动设置 UTF-8 编码）**
+
+```bash
+# Windows:
+python start.py
+
+# macOS/Linux:
+bash start.sh
+```
+
+**方式二：直接启动**
+
 ```bash
 python app.py
 ```
 
-后端服务将在 `http://localhost:8000` 启动。
+启动成功后会看到以下日志：
 
-> 如果你只修改了后端代码，不需要构建前端，FastAPI 会直接托管已有的 `frontend/dist` 静态文件。
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [xxxxx] using StatReload
+INFO:     Started server process [xxxxx]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
+
+然后在浏览器打开 **http://localhost:8000** 即可使用。
 
 ### 4.（可选）前端开发
 
@@ -163,7 +188,8 @@ GET /api/supported-sites
 2. **视频无声音**：如果下载的视频没有声音，通常是 ffmpeg 未正确加载。检查后端启动日志是否包含 ffmpeg 路径。
 3. **防盗链**：缩略图通过后端代理加载，绕过 B站 等平台的 Referer 防盗链检查。
 4. **临时文件**：下载的视频文件保存在 `downloads/` 目录，下载完成后自动清理。
-5. **仅供学习交流**：请遵守当地法律法规，尊重视频创作者的版权。
+5. **编码问题**：如果 Git Bash 出现中文乱码，请使用 `python start.py` 启动，它会自动设置 UTF-8 编码。
+6. **仅供学习交流**：请遵守当地法律法规，尊重视频创作者的版权。
 
 ## 📄 开源协议
 
