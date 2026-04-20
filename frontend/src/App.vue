@@ -69,6 +69,8 @@
       <transition name="fade-up">
         <section v-if="videoInfo" class="result-section">
           <div class="result-card">
+            <div class="result-body">
+              <div class="result-left">
             <div class="result-header">
               <div class="thumbnail-wrapper">
                 <img
@@ -185,9 +187,11 @@
                 </button>
               </div>
             </div>
+              </div>
 
-            <transition name="fade-up">
-              <div v-if="showStreamSummary && (streamContent || isStreamSummarizing)" class="ai-summary-section stream-summary-section">
+              <transition name="fade-up">
+                <div class="result-right">
+                  <div v-if="showStreamSummary && (streamContent || isStreamSummarizing)" class="ai-summary-section stream-summary-section">
                 <div class="ai-summary-header">
                   <div class="ai-badge stream-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -220,8 +224,19 @@
                     <span></span><span></span><span></span>
                   </div>
                 </div>
-              </div>
-            </transition>
+                  </div>
+                  <div v-else class="summary-placeholder">
+                    <div class="summary-placeholder-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                    </div>
+                    <p class="summary-placeholder-title">AI 视频总结</p>
+                    <p class="summary-placeholder-desc">点击左侧「流式总结 ✨」按钮<br />即可生成视频内容总结</p>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </section>
       </transition>
@@ -785,7 +800,7 @@ body {
 .main {
   position: relative;
   z-index: 5;
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -964,16 +979,34 @@ body {
   box-shadow: var(--shadow);
 }
 
-.result-header {
+.result-body {
   display: flex;
   gap: 24px;
-  margin-bottom: 28px;
+  align-items: stretch;
+}
+
+.result-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-right {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-header {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .thumbnail-wrapper {
   position: relative;
-  width: 240px;
-  min-width: 240px;
+  width: 160px;
+  min-width: 160px;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -1019,10 +1052,10 @@ body {
 }
 
 .video-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.4;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1048,14 +1081,14 @@ body {
 }
 
 .formats-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .formats-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .formats-grid {
@@ -1182,13 +1215,13 @@ body {
   border: none;
   border-radius: var(--radius-sm);
   color: white;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  padding: 16px 40px;
+  padding: 12px 28px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   transition: all 0.3s;
   font-family: inherit;
 }
@@ -1479,6 +1512,14 @@ body {
     padding: 14px;
   }
 
+  .result-body {
+    flex-direction: column;
+  }
+
+  .result-right {
+    width: 100%;
+  }
+
   .result-header {
     flex-direction: column;
   }
@@ -1544,6 +1585,10 @@ body {
     padding: 20px;
   }
 
+  .stream-summary-section {
+    max-height: 500px;
+  }
+
   .chapter-item {
     flex-direction: column;
     gap: 10px;
@@ -1555,13 +1600,13 @@ body {
   border: none;
   border-radius: var(--radius-sm);
   color: white;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  padding: 16px 32px;
+  padding: 12px 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   transition: all 0.3s;
   font-family: inherit;
 }
@@ -1582,18 +1627,22 @@ body {
 }
 
 .ai-summary-section {
-  margin-top: 28px;
-  padding: 28px;
+  padding: 20px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
   border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: var(--radius);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .ai-summary-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .ai-badge {
@@ -1745,7 +1794,7 @@ body {
 }
 
 .stream-summary-section {
-  max-height: 600px;
+  max-height: 70vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1964,6 +2013,50 @@ body {
 .stream-actions {
   display: flex;
   gap: 8px;
+}
+
+.summary-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 24px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+  border: 1px dashed rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius);
+  min-height: 280px;
+}
+
+.summary-placeholder-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--accent-3);
+}
+
+.summary-placeholder-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.summary-placeholder-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.summary-placeholder-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
 }
 
 @media (max-width: 480px) {
